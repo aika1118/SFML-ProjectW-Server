@@ -369,3 +369,6 @@ FodyWeavers.xsd
 resources/
 
 ~AutoRecover*
+
+# Config file
+Config.h
