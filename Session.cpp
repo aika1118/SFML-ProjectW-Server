@@ -193,8 +193,13 @@ void Session::send_response(const string& response)
 			if (!ec)
 			{
 				// 응답 전송 후 세션 종료
-				_socket.close(); // 소켓 닫기
-				cout << "Session closed successfully" << endl;
+				//_socket.close(); // 소켓 닫기
+				//cout << "Session closed successfully" << endl;
+
+				// 다음 패킷 요청도 받기 위해 다시 do_read_header() 호출
+				do_read_header(); 
+				cout << "Server sending packet to Client !" << endl;
+				cout << "do_read_header() again" << endl;
 			}
 			else
 			{
