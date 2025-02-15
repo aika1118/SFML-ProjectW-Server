@@ -92,19 +92,32 @@ void Session::handle_read_packet()
 
 	cout << "handle_read_packet() DB connected" << endl;
 
-	string query = "SELECT * FROM Plans WHERE user_id = ?";
-	unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
-	pstmt->setInt(1, stoi(_body)); // 클라이언트로부터 받은 데이터를 바인딩
-	unique_ptr<ResultSet> res(pstmt->executeQuery()); // 쿼리 실행
+	unique_ptr<ResultSet> res;
+	try
+	{
+		string query = "SELECT * FROM player_stage_record WHERE id = ?";
+		unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
+		pstmt->setInt(1, stoi(_body)); // 클라이언트로부터 받은 데이터를 바인딩
+		res = unique_ptr<ResultSet>(pstmt->executeQuery()); // 쿼리 실행
 
-	cout << "handle_read_packet() DB query executed" << endl;
+		cout << "handle_read_packet() DB query executed" << endl;
+	}
+	catch (SQLException& e)
+	{
+		cout << "SQLException: " << e.what() << endl;
+		send_response("SQLException: " + string(e.what()));
+		return;
+	}
 
 	string result;
 	while (res->next())
 	{
 		try
 		{
-			result += res->getString("plan_name") + "\n";
+			// 여러 컬럼 값을 한 번에 가져오기
+			result +=	res->getString("stage") + " " +
+						res->getString("score") + " " +
+						res->getString("time") + "\n";
 		}
 		catch (SQLException& e)
 		{
@@ -128,22 +141,32 @@ void Session::handle_write_packet()
 
 	cout << "handle_write_packet() DB connected" << endl;
 
-	string query = "INSERT INTO Plans (plan_name, user_id) VALUES (?, ?)";
-	unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
-
 	vector<string> body = parseBody(_body);
-	if (body.size() != 2)
+	if (body.size() != 4)
 	{
 		cerr << "Invalid body !" << endl;
 		return;
 	}
-	pstmt->setString(1, body[0]);
-	pstmt->setInt(2, stoi(body[1]));
-	pstmt->executeQuery(); // 쿼리 실행
 
-	cout << "handle_write_packet() DB query executed" << endl;
+	try
+	{
+		string query = "INSERT INTO player_stage_record (id, stage, score, time) VALUES (?, ?, ?, ?)";
+		unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
 
-	send_response("Write successful\n"); // 클라이언트에게 성공 메세지 전송
+		pstmt->setInt(1, stoi(body[0]));
+		pstmt->setInt(2, stoi(body[1]));
+		pstmt->setDouble(3, stod(body[2]));
+		pstmt->setDouble(4, stod(body[3]));
+		pstmt->executeQuery(); // 쿼리 실행
+
+		cout << "handle_write_packet() DB query executed" << endl;
+		send_response("Write successful\n"); // 클라이언트에게 성공 메세지 전송	
+	}
+	catch (SQLException& e)
+	{
+		cout << "SQLException: " << e.what() << endl;
+		send_response("SQLException: " + string(e.what()));
+	}
 }
 
 void Session::handle_save_packet()
