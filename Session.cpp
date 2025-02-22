@@ -28,6 +28,7 @@ void Session::do_read_header()
 				if (_header.size > 1024)
 				{
 					cerr << "Invalid packet size !" << endl;
+					cerr << "Sending packet with size: " << _header.size << endl;
 					return;
 				}
 				do_read_body(); // 헤더를 읽은 후 바디를 읽기 시작
@@ -69,13 +70,16 @@ void Session::handle_packet()
 	switch (_header.type)
 	{
 	case PACKET_READ:
-		handle_read_packet(); // DB 읽기 요청 처리
+		handle_read_packet(_header.type); // DB 읽기 요청 처리
 		break;
 	case PACKET_WRITE:
-		handle_write_packet(); // DB 쓰기 요청 처리
+		handle_write_packet(_header.type); // DB 쓰기 요청 처리
+		break;
+	case PACKET_CREATE:
+		handle_create_packet(_header.type); // 게임 생성 요청 처리
 		break;
 	case PACKET_SAVE:
-		handle_save_packet(); // 게임 세이브 요청 처리
+		handle_save_packet(_header.type); // 게임 세이브 요청 처리
 		break;
 	default:
 		cerr << "Unknown packet type !" << endl;
@@ -83,7 +87,7 @@ void Session::handle_packet()
 	}
 }
 
-void Session::handle_read_packet()
+void Session::handle_read_packet(PacketType packetType)
 {
 	cout << "handle_read_packet() start" << endl;
 	MySQL_Driver* driver = get_mysql_driver_instance();
@@ -105,7 +109,7 @@ void Session::handle_read_packet()
 	catch (SQLException& e)
 	{
 		cout << "SQLException: " << e.what() << endl;
-		send_response("SQLException: " + string(e.what()));
+		send_response(packetType, "SQLException: " + string(e.what()));
 		return;
 	}
 
@@ -129,10 +133,10 @@ void Session::handle_read_packet()
 
 	cout << "handle_read_packet() ready to send result" << endl;
 
-	send_response(result); // 클라이언트에게 결과 전송
+	send_response(packetType, result); // 클라이언트에게 결과 전송
 }
 
-void Session::handle_write_packet()
+void Session::handle_write_packet(PacketType packetType)
 {
 	cout << "handle_write_packet() start" << endl;
 	MySQL_Driver* driver = get_mysql_driver_instance();
@@ -160,31 +164,79 @@ void Session::handle_write_packet()
 		pstmt->executeQuery(); // 쿼리 실행
 
 		cout << "handle_write_packet() DB query executed" << endl;
-		send_response("Write successful\n"); // 클라이언트에게 성공 메세지 전송	
+		send_response(packetType, "Write successful\n"); // 클라이언트에게 성공 메세지 전송	
 	}
 	catch (SQLException& e)
 	{
 		cout << "SQLException: " << e.what() << endl;
-		send_response("SQLException: " + string(e.what()));
+		send_response(packetType, "SQLException: " + string(e.what()));
 	}
 }
 
-void Session::handle_save_packet()
+void Session::handle_create_packet(PacketType packetType)
+{
+	cout << "handle_create_packet() start" << endl;
+	MySQL_Driver* driver = get_mysql_driver_instance();
+	unique_ptr<Connection> con(driver->connect(DB_HOST, DB_USERNAME, DB_PASSWORD));
+	con->setSchema(DB_SCHEMA);
+
+	cout << "handle_create_packet() DB connected" << endl;
+
+	try
+	{
+		// 트랜잭션 시작 (닉네임 저장 + uid 얻는 과정)
+		con->setAutoCommit(false);
+
+		// 1. 닉네임을 DB에 저장
+		string query = "INSERT INTO player_info (username) VALUES (?)";
+		unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
+		pstmt->setString(1, _body);
+		pstmt->executeQuery(); // 쿼리 실행
+
+		// 2. uid를 DB에서 얻어오기
+		query = "SELECT uid FROM player_info WHERE username = ?";
+		unique_ptr<PreparedStatement> pstmt2(con->prepareStatement(query));
+		pstmt2->setString(1, _body);
+		unique_ptr<ResultSet> res(pstmt2->executeQuery()); // 쿼리 실행
+		string uid;
+		if (res->next()) uid = res->getString("uid");
+
+		send_response(packetType, uid); // 클라이언트에게 생성된 uid 전송
+
+		con->commit(); // 트랜잭션 커밋
+
+		cout << "handle_create_packet() DB query executed" << endl;
+	}
+	catch (SQLException& e)
+	{
+		// 에러 발생 시 트랜잭션 롤백
+		con->rollback();
+		cout << "SQLException: " << e.what() << endl;
+		send_response(packetType, "SQLException: " + string(e.what()));
+	}
+
+	return;
+}
+
+void Session::handle_save_packet(PacketType packetType)
 {
 	return;
 }
 
-void Session::send_response(const string& response)
+void Session::send_response(PacketType packetType, const string& response)
 {
 	// shared_ptr로 자기 자신을 유지
 	shared_ptr<Session> self(shared_from_this()); 
 	// 응답 데이터를 shared_ptr로 감싸서 안전하게 관리 (response가 현재 참조자라 비동기 처리 중 파괴될 위험 있음)
 	shared_ptr<string> response_ptr = make_shared<string>(response);
 
-	// 응답 크기 전송 (4바이트 크기)
-	uint32_t response_size = static_cast<uint32_t>(response.size());
+	// 패킷 헤더 설정
+	PacketHeader header;
+	header.type = packetType;
+	header.size = static_cast<uint32_t>(response.size());
+
 	vector<const_buffer> buffers;
-	buffers.push_back(buffer(&response_size, sizeof(response_size))); // 응답 크기
+	buffers.push_back(buffer(&header, sizeof(header))); // 패킷 헤더
 	buffers.push_back(buffer(*response_ptr)); // 응답 본문
 
 	async_write(_socket, buffers,
@@ -192,9 +244,6 @@ void Session::send_response(const string& response)
 		{
 			if (!ec)
 			{
-				// 응답 전송 후 세션 종료
-				//_socket.close(); // 소켓 닫기
-				//cout << "Session closed successfully" << endl;
 
 				// 다음 패킷 요청도 받기 위해 다시 do_read_header() 호출
 				do_read_header(); 

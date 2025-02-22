@@ -30,11 +30,12 @@ private:
 	void do_read_header(); // 패킷 헤더를 비동기적으로 읽는 함수
 	void do_read_body(); // 패킷 바디를 비동기적으로 읽는 함수
 	void handle_packet(); // 패킷 종류에 따라 적절한 핸들러를 호출하는 함수
-	void handle_read_packet(); // DB에서 데이터를 읽어오는 함수
-	void handle_write_packet(); // DB에 데이터를 쓰는 함수
-	void handle_save_packet(); // 게임 세이브 요청을 처리하는 함수
+	void handle_read_packet(PacketType packetType); // DB에서 데이터를 읽어오는 함수
+	void handle_write_packet(PacketType packetType); // DB에 데이터를 쓰는 함수
+	void handle_create_packet(PacketType packetType); // // 닉네임 생성 및 uid 발급 
+	void handle_save_packet(PacketType packetType); // 게임 세이브 요청을 처리하는 함수
 
-	void send_response(const string& response); // 클라이언트에게 응답을 전송하는 함수
+	void send_response(PacketType packetType, const string& response); // 클라이언트에게 응답을 전송하는 함수
 
 	vector<string> parseBody(const string& _body); // , 기준으로 문자열을 하나씩 읽어들여 vector에 저장
 };

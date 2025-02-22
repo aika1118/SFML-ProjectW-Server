@@ -1,10 +1,13 @@
 #pragma once
 
+// client, server 공통으로 쓰는 파일이라 파일 저장 위치에 대해 고민 필요
+
 // 패킷 종류를 정의하는 열거형
 enum PacketType
 {
 	PACKET_READ, // DB에서 데이터를 읽어오는 패킷
 	PACKET_WRITE, // DB에 데이터를 쓰는 패킷
+	PACKET_CREATE, // 닉네임 생성 및 uid 발급 
 	PACKET_SAVE  // 게임 세이브 요청을 위한 패킷
 };
 
