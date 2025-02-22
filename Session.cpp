@@ -154,13 +154,17 @@ void Session::handle_write_packet(PacketType packetType)
 
 	try
 	{
-		string query = "INSERT INTO player_stage_record (id, stage, score, time) VALUES (?, ?, ?, ?)";
+		// id, stage가 primary key이며 중복된 primary key가 아니라면 INSERT, 이미 있는 primary key라면 UPDATE
+		string query = "INSERT INTO player_stage_record (id, stage, score, time) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE score = ?, time = ?";
 		unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
 
 		pstmt->setInt(1, stoi(body[0]));
 		pstmt->setInt(2, stoi(body[1]));
 		pstmt->setDouble(3, stod(body[2]));
 		pstmt->setDouble(4, stod(body[3]));
+
+		pstmt->setDouble(5, stod(body[2]));
+		pstmt->setDouble(6, stod(body[3]));
 		pstmt->executeQuery(); // 쿼리 실행
 
 		cout << "handle_write_packet() DB query executed" << endl;
