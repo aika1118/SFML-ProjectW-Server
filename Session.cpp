@@ -212,7 +212,7 @@ void Session::handle_create_packet(PacketType packetType)
 		// 에러 발생 시 트랜잭션 롤백
 		con->rollback();
 		cout << "SQLException: " << e.what() << endl;
-		send_response(packetType, "SQLException: " + string(e.what()));
+		send_response(PACKET_CREATE_ERROR, "SQLException: " + string(e.what()));
 	}
 
 	return;
