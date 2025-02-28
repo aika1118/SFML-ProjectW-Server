@@ -81,8 +81,13 @@ void Session::handle_packet()
 	case PACKET_SAVE:
 		handle_save_packet(_header.type); // 게임 세이브 요청 처리
 		break;
+	case PACKET_READ_RANKING:
+		handle_read_ranking_packet(_header.type); // 랭킹 데이터 읽기 요청 처리
+		break;
 	default:
-		cerr << "Unknown packet type !" << endl;
+		string result = "Unknown packet type !";
+		cerr << result << endl;
+		send_response(_header.type, result);
 		break;
 	}
 }
@@ -99,7 +104,7 @@ void Session::handle_read_packet(PacketType packetType)
 	unique_ptr<ResultSet> res;
 	try
 	{
-		string query = "SELECT * FROM player_stage_record WHERE id = ?";
+		string query = "SELECT * FROM player_stage_record WHERE uid = ?";
 		unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
 		pstmt->setInt(1, stoi(_body)); // 클라이언트로부터 받은 데이터를 바인딩
 		res = unique_ptr<ResultSet>(pstmt->executeQuery()); // 쿼리 실행
@@ -155,7 +160,7 @@ void Session::handle_write_packet(PacketType packetType)
 	try
 	{
 		// id, stage가 primary key이며 중복된 primary key가 아니라면 INSERT, 이미 있는 primary key라면 UPDATE
-		string query = "INSERT INTO player_stage_record (id, stage, score, time) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE score = ?, time = ?";
+		string query = "INSERT INTO player_stage_record (uid, stage, score, time) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE score = ?, time = ?";
 		unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
 
 		pstmt->setInt(1, stoi(body[0]));
@@ -225,6 +230,69 @@ void Session::handle_create_packet(PacketType packetType)
 void Session::handle_save_packet(PacketType packetType)
 {
 	return;
+}
+
+void Session::handle_read_ranking_packet(PacketType packetType)
+{
+	cout << "handle_read_ranking_packet() start" << endl;
+	MySQL_Driver* driver = get_mysql_driver_instance();
+	unique_ptr<Connection> con(driver->connect(DB_HOST, DB_USERNAME, DB_PASSWORD));
+	con->setSchema(DB_SCHEMA);
+
+	cout << "handle_read_ranking_packet() start" << endl;
+
+	unique_ptr<ResultSet> res;
+	try
+	{	
+		// uid 별 모든 stage 점수 합이 높은 순서대로 SELECT (uid에 대응하는 username과 total_score SELECT)
+		string query = R"(
+			SELECT 
+				PI.username, 
+				ROUND(SUM(IFNULL(PSR.score, 0)), 2) AS total_score
+			FROM
+				sfml_projectW.player_info PI
+			LEFT JOIN
+				sfml_projectW.player_stage_record AS PSR
+			ON 
+				PI.uid = PSR.uid
+			GROUP BY 
+				PI.username
+			ORDER BY 
+				total_score DESC
+		)";
+
+		unique_ptr<Statement> stmt(con->createStatement());
+		res = unique_ptr<ResultSet>(stmt->executeQuery(query));
+
+		cout << "handle_read_ranking_packet() DB query executed" << endl;
+	}
+	catch (SQLException& e)
+	{
+		cout << "SQLException: " << e.what() << endl;
+		send_response(packetType, "SQLException: " + string(e.what()));
+		return;
+	}
+
+	string result;
+	while (res->next())
+	{
+		try
+		{
+			// 여러 컬럼 값을 한 번에 가져오기
+			result += res->getString("username") + " " +
+				res->getString("total_score") + "\n";
+		}
+		catch (SQLException& e)
+		{
+			cout << "SQLException: " << e.what() << endl;
+			result += "NULL\n";
+		}
+
+	}
+
+	cout << "handle_read_ranking_packet() ready to send result" << endl;
+
+	send_response(packetType, result); // 클라이언트에게 결과 전송
 }
 
 void Session::send_response(PacketType packetType, const string& response)

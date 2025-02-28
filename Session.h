@@ -34,6 +34,7 @@ private:
 	void handle_write_packet(PacketType packetType); // DB에 데이터를 쓰는 함수
 	void handle_create_packet(PacketType packetType); // // 닉네임 생성 및 uid 발급 
 	void handle_save_packet(PacketType packetType); // 게임 세이브 요청을 처리하는 함수
+	void handle_read_ranking_packet(PacketType packetType); // 랭킹 데이터를 전달하는 함수
 
 	void send_response(PacketType packetType, const string& response); // 클라이언트에게 응답을 전송하는 함수
 

@@ -10,6 +10,7 @@ enum PacketType
 	PACKET_CREATE, // 닉네임 생성 및 uid 발급 
 	PACKET_CREATE_ERROR, // PACKET_CREATE 서버 처리 중 예외사항 발생 시 반환 
 	PACKET_SAVE,  // 게임 세이브 요청을 위한 패킷
+	PACKET_READ_RANKING //  랭킹 데이터를 얻기 위한 패킷
 };
 
 // 패킷 헤더 구조체 (패킷 종류와 크기를 저장)
