@@ -84,6 +84,10 @@ void Session::handle_packet()
 	case PACKET_READ_RANKING:
 		handle_read_ranking_packet(_header.type); // 랭킹 데이터 읽기 요청 처리
 		break;
+	case PACKET_READ_MAX_CLEAR_STAGE:
+		handle_read_max_clear_stage_packet(_header.type); // 랭킹 데이터 읽기 요청 처리
+		break;
+
 	default:
 		string result = "Unknown packet type !";
 		cerr << result << endl;
@@ -239,8 +243,6 @@ void Session::handle_read_ranking_packet(PacketType packetType)
 	unique_ptr<Connection> con(driver->connect(DB_HOST, DB_USERNAME, DB_PASSWORD));
 	con->setSchema(DB_SCHEMA);
 
-	cout << "handle_read_ranking_packet() start" << endl;
-
 	unique_ptr<ResultSet> res;
 	try
 	{	
@@ -291,6 +293,59 @@ void Session::handle_read_ranking_packet(PacketType packetType)
 	}
 
 	cout << "handle_read_ranking_packet() ready to send result" << endl;
+
+	send_response(packetType, result); // 클라이언트에게 결과 전송
+}
+
+void Session::handle_read_max_clear_stage_packet(PacketType packetType)
+{
+	cout << "handle_read_max_clear_stage_packet() start" << endl;
+	MySQL_Driver* driver = get_mysql_driver_instance();
+	unique_ptr<Connection> con(driver->connect(DB_HOST, DB_USERNAME, DB_PASSWORD));
+	con->setSchema(DB_SCHEMA);
+
+	unique_ptr<ResultSet> res;
+	try
+	{
+		// uid 별 모든 stage 점수 합이 높은 순서대로 SELECT (uid에 대응하는 username과 total_score SELECT)
+		string query = R"(
+			SELECT 
+				COALESCE(MAX(stage), -1) AS max_clear_stage
+			FROM 
+				sfml_projectW.player_stage_record psr 
+			WHERE 
+				uid = (?)
+		)";
+
+		unique_ptr<PreparedStatement> pstmt(con->prepareStatement(query));
+		pstmt->setString(1, _body);
+		res = unique_ptr<ResultSet>(pstmt->executeQuery()); // 쿼리 실행
+
+		cout << "handle_read_max_clear_stage_packet() DB query executed" << endl;
+	}
+	catch (SQLException& e)
+	{
+		cout << "SQLException: " << e.what() << endl;
+		send_response(packetType, "SQLException: " + string(e.what()));
+		return;
+	}
+
+	string result;
+	while (res->next())
+	{
+		try
+		{
+			// 여러 컬럼 값을 한 번에 가져오기
+			result += res->getString("max_clear_stage");
+		}
+		catch (SQLException& e)
+		{
+			cout << "SQLException: " << e.what() << endl;
+			result += "NULL\n";
+		}
+	}
+
+	cout << "handle_read_max_clear_stage_packet() ready to send result" << endl;
 
 	send_response(packetType, result); // 클라이언트에게 결과 전송
 }
