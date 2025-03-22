@@ -17,7 +17,7 @@ using namespace boost::asio::ip;
 class Session : public enable_shared_from_this<Session>
 {
 public:
-	Session(tcp::socket socket, Server& server, thread_pool& pool); // 생성자: 소켓과 서버 참조를 초기화
+	Session(tcp::socket socket, Server& server, thread_pool& pool, io_context& io_context); // 생성자: 소켓과 서버 참조를 초기화
 	void start(); // 세션 시작
 
 private:
@@ -40,4 +40,6 @@ private:
 	void send_response(PacketType packetType, const string& response); // 클라이언트에게 응답을 전송하는 함수
 
 	vector<string> parseBody(const string& _body); // , 기준으로 문자열을 하나씩 읽어들여 vector에 저장
+
+	strand<io_context::executor_type> _strand; // 소켓 접근 순차화
 };

@@ -22,6 +22,7 @@ private:
 	tcp::acceptor _acceptor; // 클라이언트 연결을 받는 acceptor
 	thread_pool& _pool; // 스레드 풀 참조
 	mutex _mutex; // 플레이어 상태에 대한 뮤텍스
+	io_context& _io_context;
 
 	void do_accept(); // 클라이언트 연결을 비동기적으로 받는 함수
 };

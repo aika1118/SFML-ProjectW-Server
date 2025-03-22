@@ -1,8 +1,8 @@
 #include "Session.h"
 #include "Server.h"
 
-Session::Session(tcp::socket socket, Server& server, thread_pool& pool)
-	: _socket(move(socket)), _server(server), _pool(pool), _header(), _body()
+Session::Session(tcp::socket socket, Server& server, thread_pool& pool, io_context& io_context)
+	: _socket(move(socket)), _server(server), _pool(pool), _strand(make_strand(io_context)), _header(), _body()
 {
 }
 
@@ -53,7 +53,7 @@ void Session::do_read_body()
 			if (!ec)
 			{
 				// 바디를 읽은 후 패킷 처리
-				post(_pool, [this, self] {handle_packet(); }); // 스레드 풀에 작업을 추가
+				post(_socket.get_executor(), [this, self] {handle_packet(); }); // 작업을 io_context에 추가하고, pool의 스레드 중 하나가 이를 처리
 			}
 			else
 			{
@@ -293,6 +293,7 @@ void Session::handle_read_ranking_packet(PacketType packetType)
 	}
 
 	cout << "handle_read_ranking_packet() ready to send result" << endl;
+	std::cout << "Ranking packetType: " << packetType << ", result: " << result << std::endl;
 
 	send_response(packetType, result); // 클라이언트에게 결과 전송
 }
@@ -347,6 +348,7 @@ void Session::handle_read_max_clear_stage_packet(PacketType packetType)
 
 	cout << "handle_read_max_clear_stage_packet() ready to send result" << endl;
 
+	std::cout << "MAX_CLEAR packetType: " << packetType << ", result: " << result << std::endl;
 	send_response(packetType, result); // 클라이언트에게 결과 전송
 }
 
@@ -357,32 +359,36 @@ void Session::send_response(PacketType packetType, const string& response)
 	// 응답 데이터를 shared_ptr로 감싸서 안전하게 관리 (response가 현재 참조자라 비동기 처리 중 파괴될 위험 있음)
 	shared_ptr<string> response_ptr = make_shared<string>(response);
 
-	// 패킷 헤더 설정
-	PacketHeader header;
-	header.type = packetType;
-	header.size = static_cast<uint32_t>(response.size());
+	post(_strand, [this, self, packetType, response_ptr]() {
+		// 패킷 헤더 설정
+		PacketHeader header;
+		header.type = packetType;
+		header.size = static_cast<uint32_t>(response_ptr.get()->size());
 
-	vector<const_buffer> buffers;
-	buffers.push_back(buffer(&header, sizeof(header))); // 패킷 헤더
-	buffers.push_back(buffer(*response_ptr)); // 응답 본문
+		vector<const_buffer> buffers;
+		buffers.push_back(buffer(&header, sizeof(header))); // 패킷 헤더
+		buffers.push_back(buffer(*response_ptr)); // 응답 본문
 
-	async_write(_socket, buffers,
-		[this, self, response_ptr](boost::system::error_code ec, size_t length)
-		{
-			if (!ec)
-			{
+		async_write(_socket, buffers,
+			bind_executor(_strand, 
+				[this, self, response_ptr](boost::system::error_code ec, size_t length)
+				{
+					if (!ec)
+					{
 
-				// 다음 패킷 요청도 받기 위해 다시 do_read_header() 호출
-				do_read_header(); 
-				cout << "Server sending packet to Client !" << endl;
-				cout << "do_read_header() again" << endl;
-			}
-			else
-			{
-				cerr << "Error Sending response: " << ec.message() << endl;
-			}
-		}
-	);
+						// 다음 패킷 요청도 받기 위해 다시 do_read_header() 호출
+						do_read_header(); 
+						cout << "Server sending packet to Client !" << endl;
+						cout << "do_read_header() again" << endl;
+					}
+					else
+					{
+						cerr << "Error Sending response: " << ec.message() << endl;
+					}
+				}
+			)
+		);
+	});
 
 	// shared_ptr self의 참조 카운트가 0이 될 때 Session 객체는 자동으로 소멸
 }

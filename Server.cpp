@@ -2,7 +2,7 @@
 #include <memory>
 
 Server::Server(io_context& io_context, short port, thread_pool& pool)
-	: _acceptor(io_context, tcp::endpoint(tcp::v4(), port)), _pool(pool)
+	: _io_context(io_context), _acceptor(io_context, tcp::endpoint(tcp::v4(), port)), _pool(pool)
 {
 	do_accept();
 }
@@ -15,7 +15,7 @@ void Server::do_accept()
 			{
 				// 클라이언트가 연결되면 세션을 생성하고 시작
 				// Session 클래스에서 shared_from_this()를 통해 참조 카운트 유지
-				make_shared<Session>(move(socket), *this, _pool)->start();
+				make_shared<Session>(move(socket), *this, _pool, _io_context)->start();
 			}
 			else
 			{
