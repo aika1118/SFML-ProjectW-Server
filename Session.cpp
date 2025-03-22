@@ -91,7 +91,7 @@ void Session::handle_packet()
 	default:
 		string result = "Unknown packet type !";
 		cerr << result << endl;
-		send_response(_header.type, result);
+		send_response(_header.type, result, _header.request_id);
 		break;
 	}
 }
@@ -118,7 +118,7 @@ void Session::handle_read_packet(PacketType packetType)
 	catch (SQLException& e)
 	{
 		cout << "SQLException: " << e.what() << endl;
-		send_response(packetType, "SQLException: " + string(e.what()));
+		send_response(packetType, "SQLException: " + string(e.what()), _header.request_id);
 		return;
 	}
 
@@ -142,7 +142,7 @@ void Session::handle_read_packet(PacketType packetType)
 
 	cout << "handle_read_packet() ready to send result" << endl;
 
-	send_response(packetType, result); // 클라이언트에게 결과 전송
+	send_response(packetType, result, _header.request_id); // 클라이언트에게 결과 전송
 }
 
 void Session::handle_write_packet(PacketType packetType)
@@ -177,12 +177,12 @@ void Session::handle_write_packet(PacketType packetType)
 		pstmt->executeQuery(); // 쿼리 실행
 
 		cout << "handle_write_packet() DB query executed" << endl;
-		send_response(packetType, "Write successful\n"); // 클라이언트에게 성공 메세지 전송	
+		send_response(packetType, "Write successful\n", _header.request_id); // 클라이언트에게 성공 메세지 전송	
 	}
 	catch (SQLException& e)
 	{
 		cout << "SQLException: " << e.what() << endl;
-		send_response(packetType, "SQLException: " + string(e.what()));
+		send_response(packetType, "SQLException: " + string(e.what()), _header.request_id);
 	}
 }
 
@@ -214,7 +214,7 @@ void Session::handle_create_packet(PacketType packetType)
 		string uid;
 		if (res->next()) uid = res->getString("uid");
 
-		send_response(packetType, uid); // 클라이언트에게 생성된 uid 전송
+		send_response(packetType, uid, _header.request_id); // 클라이언트에게 생성된 uid 전송
 
 		con->commit(); // 트랜잭션 커밋
 
@@ -225,7 +225,7 @@ void Session::handle_create_packet(PacketType packetType)
 		// 에러 발생 시 트랜잭션 롤백
 		con->rollback();
 		cout << "SQLException: " << e.what() << endl;
-		send_response(PACKET_CREATE_ERROR, "SQLException: " + string(e.what()));
+		send_response(PACKET_CREATE_ERROR, "SQLException: " + string(e.what()), _header.request_id);
 	}
 
 	return;
@@ -271,7 +271,7 @@ void Session::handle_read_ranking_packet(PacketType packetType)
 	catch (SQLException& e)
 	{
 		cout << "SQLException: " << e.what() << endl;
-		send_response(packetType, "SQLException: " + string(e.what()));
+		send_response(packetType, "SQLException: " + string(e.what()), _header.request_id);
 		return;
 	}
 
@@ -293,9 +293,8 @@ void Session::handle_read_ranking_packet(PacketType packetType)
 	}
 
 	cout << "handle_read_ranking_packet() ready to send result" << endl;
-	std::cout << "Ranking packetType: " << packetType << ", result: " << result << std::endl;
 
-	send_response(packetType, result); // 클라이언트에게 결과 전송
+	send_response(packetType, result, _header.request_id); // 클라이언트에게 결과 전송
 }
 
 void Session::handle_read_max_clear_stage_packet(PacketType packetType)
@@ -327,7 +326,7 @@ void Session::handle_read_max_clear_stage_packet(PacketType packetType)
 	catch (SQLException& e)
 	{
 		cout << "SQLException: " << e.what() << endl;
-		send_response(packetType, "SQLException: " + string(e.what()));
+		send_response(packetType, "SQLException: " + string(e.what()), _header.request_id);
 		return;
 	}
 
@@ -348,22 +347,22 @@ void Session::handle_read_max_clear_stage_packet(PacketType packetType)
 
 	cout << "handle_read_max_clear_stage_packet() ready to send result" << endl;
 
-	std::cout << "MAX_CLEAR packetType: " << packetType << ", result: " << result << std::endl;
-	send_response(packetType, result); // 클라이언트에게 결과 전송
+	send_response(packetType, result, _header.request_id); // 클라이언트에게 결과 전송
 }
 
-void Session::send_response(PacketType packetType, const string& response)
+void Session::send_response(PacketType packetType, const string& response, uint32_t request_id)
 {
 	// shared_ptr로 자기 자신을 유지
 	shared_ptr<Session> self(shared_from_this()); 
 	// 응답 데이터를 shared_ptr로 감싸서 안전하게 관리 (response가 현재 참조자라 비동기 처리 중 파괴될 위험 있음)
 	shared_ptr<string> response_ptr = make_shared<string>(response);
 
-	post(_strand, [this, self, packetType, response_ptr]() {
+	post(_strand, [this, self, packetType, response_ptr, request_id]() {
 		// 패킷 헤더 설정
 		PacketHeader header;
 		header.type = packetType;
 		header.size = static_cast<uint32_t>(response_ptr.get()->size());
+		header.request_id = request_id;
 
 		vector<const_buffer> buffers;
 		buffers.push_back(buffer(&header, sizeof(header))); // 패킷 헤더

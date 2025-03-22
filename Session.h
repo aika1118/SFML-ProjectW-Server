@@ -37,7 +37,7 @@ private:
 	void handle_read_ranking_packet(PacketType packetType); // 랭킹 데이터를 전달하는 함수
 	void handle_read_max_clear_stage_packet(PacketType packetType); // 유저 최신 clear stage 정보 받기
 
-	void send_response(PacketType packetType, const string& response); // 클라이언트에게 응답을 전송하는 함수
+	void send_response(PacketType packetType, const string& response, uint32_t request_id); // 클라이언트에게 응답을 전송하는 함수
 
 	vector<string> parseBody(const string& _body); // , 기준으로 문자열을 하나씩 읽어들여 vector에 저장
 
