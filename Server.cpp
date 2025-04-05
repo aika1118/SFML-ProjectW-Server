@@ -15,7 +15,7 @@ void Server::do_accept()
 			{
 				// 클라이언트가 연결되면 세션을 생성하고 시작
 				// Session 클래스에서 shared_from_this()를 통해 참조 카운트 유지
-				make_shared<Session>(move(socket), *this, _pool, _io_context)->start();
+				make_shared<Session>(move(socket), *this, _pool, _io_context)->start(); // 클라이언트 요청 별 독립 인스턴스로 작동
 			}
 			else
 			{
