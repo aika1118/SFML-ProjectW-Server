@@ -15,10 +15,11 @@ void Session::start()
 void Session::do_read_header()
 {
 	shared_ptr<Session> self(shared_from_this()); // shared_ptr로 자기 자신을 유지
+	cout << "do_read_header() start" << endl;
+
 	// socket : 데이터를 읽을 소켓, 데이터는 buffer에 저장함
 	// buffer : 데이터를 저장할 버퍼
 	// handler : 읽기 작업이 완료되면 호출되는 콜백 함수
-	cout << "do_read_header() start" << endl;
 	async_read(_socket, buffer(&_header, sizeof(_header)),
 		[this, self](boost::system::error_code ec, size_t length)
 		{
@@ -77,9 +78,6 @@ void Session::handle_packet()
 		break;
 	case PACKET_CREATE:
 		handle_create_packet(_header.type); // 게임 생성 요청 처리
-		break;
-	case PACKET_SAVE:
-		handle_save_packet(_header.type); // 게임 세이브 요청 처리
 		break;
 	case PACKET_READ_RANKING:
 		handle_read_ranking_packet(_header.type); // 랭킹 데이터 읽기 요청 처리
@@ -239,11 +237,6 @@ void Session::handle_create_packet(PacketType packetType)
 	return;
 }
 
-void Session::handle_save_packet(PacketType packetType)
-{
-	return;
-}
-
 void Session::handle_read_ranking_packet(PacketType packetType)
 {
 	cout << "handle_read_ranking_packet() start" << endl;
@@ -382,7 +375,6 @@ void Session::send_response(PacketType packetType, const string& response, uint3
 				{
 					if (!ec)
 					{
-
 						// 다음 패킷 요청도 받기 위해 다시 do_read_header() 호출
 						do_read_header(); 
 						cout << "Server sending packet to Client !" << endl;
