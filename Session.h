@@ -1,9 +1,17 @@
 #pragma once
 #include "Packet.h"
 #include "Config.h"
-#include <mysql/jdbc.h>
 #include <boost/asio.hpp>
 #include <sstream>
+#ifdef _WIN32
+	#include <mysql/jdbc.h>
+#else
+	#include "mysql_driver.h"
+	#include "mysql_connection.h"
+	#include <cppconn/resultset.h>
+	#include <cppconn/prepared_statement.h>
+	#include <cppconn/driver.h>
+#endif
 
 // 클라이언트와의 세션을 관리하는 클래스
 // 상속을 통해 해당 클래스 객체가 자기 자신을 안전하게 shared_ptr로 만들 수 있는 기능을 갖게 됨

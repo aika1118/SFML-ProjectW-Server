@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <cstddef>
 // client, server 공통으로 쓰는 파일이라 파일 저장 위치에 대해 고민 필요
 
 // 패킷 종류를 정의하는 열거형
@@ -19,7 +20,7 @@ enum PacketType
 struct PacketHeader
 {
 	PacketType type; // 패킷 종류
-	size_t size; // 패킷 바디의 크기
+	size_t size; // 패킷 바디의 크기ls
 	uint32_t request_id; // 요청 ID 추가
 };
 
