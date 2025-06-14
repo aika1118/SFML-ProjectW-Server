@@ -26,8 +26,8 @@ int main()
 			});
 		}
 
-		// 서버 시작 (포트 12345)
-		Server server(io_context, 12345, pool);
+		// 서버 시작
+		Server server(io_context, SERVER_PORT, pool);
 
 		pool.join(); // thread_pool이 종료될 때까지 대기
 	}
