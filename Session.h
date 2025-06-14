@@ -13,7 +13,7 @@
 	#include <cppconn/driver.h>
 #endif
 
-// 젠킨스 test777
+// 젠킨스 테스트
 // 클라이언트와의 세션을 관리하는 클래스
 // 상속을 통해 해당 클래스 객체가 자기 자신을 안전하게 shared_ptr로 만들 수 있는 기능을 갖게 됨
 class Server;
